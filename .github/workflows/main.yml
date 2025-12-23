@@ -1,0 +1,81 @@
+name: Natural Daily Commit with Quotes
+
+on:
+  schedule:
+    - cron: '0 1 * * *' # 08:00 WIB
+  workflow_dispatch:
+
+jobs:
+  daily:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Random delay (0–3 hours)
+        run: |
+          sleep $((RANDOM % 10800))
+
+      - name: Decide activity level
+        id: activity
+        run: |
+          LEVEL=$((RANDOM % 100))
+          if [ $LEVEL -lt 15 ]; then
+            echo "type=light" >> $GITHUB_OUTPUT
+          else
+            echo "type=normal" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Prepare quote
+        run: |
+          quotes=(
+            "Consistency beats motivation."
+            "Small steps every day."
+            "Progress over perfection."
+            "Learning never stops."
+            "Discipline creates results."
+            "Make it work, then make it better."
+          )
+          echo "${quotes[$RANDOM % ${#quotes[@]}]}" > quote.txt
+
+      - name: Daily update
+        run: |
+          mkdir -p logs
+          echo "- $(date '+%Y-%m-%d %H:%M:%S'): $(cat quote.txt)" >> logs/$(date '+%Y-%m').md
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add .
+
+          if [ "${{ steps.activity.outputs.type }}" = "light" ]; then
+            git commit -m "chore: light activity"
+          else
+            git commit -m "daily quote: $(cat quote.txt)"
+          fi
+
+          git push
+
+  weekly-summary:
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 1 * * 0'
+    needs: daily
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create weekly summary
+        run: |
+          mkdir -p summary
+          echo "# Weekly Summary" > summary/weekly.md
+          echo "" >> summary/weekly.md
+          tail -n 50 logs/*.md >> summary/weekly.md || true
+
+      - name: Commit weekly summary
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add summary/weekly.md
+          git commit -m "weekly summary"
+          git push
